@@ -5,13 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fb0ebc29-37b5-4959-b151-9e51c5c27187" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/../.idea/SuperHome.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Backend/LedBackend/led_room_manager.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Backend/LedBackend/sunrise_api.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../Backend/.dockerignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../Backend/Dockerfile" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../Backend/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Backend/.idea/LedBackend.iml" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/.idea/LedBackend.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Backend/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Backend/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/.idea/vcs.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -45,7 +44,7 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "ignore_missing_gitignore": "true",
-    "last_opened_file_path": "/home/matik/PycharmProjects/SuperHome/Micropython",
+    "last_opened_file_path": "/home/matik/PycharmProjects/SuperHome/Backend",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -116,7 +115,8 @@
       <workItem from="1714778293589" duration="11180000" />
       <workItem from="1720470893507" duration="370000" />
       <workItem from="1720472459164" duration="2085000" />
-      <workItem from="1720479942346" duration="1230000" />
+      <workItem from="1720479942346" duration="1270000" />
+      <workItem from="1720565575139" duration="1327000" />
     </task>
     <servers />
   </component>
