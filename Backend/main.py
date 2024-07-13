@@ -36,3 +36,17 @@ async def detected_move(house_name: str, room_name: str):
     room = rooms[room_name]
     room.handle_detected_move()
     return {"OK": "OK"}
+
+
+@app.get("/house/{house_name}/room/{room_name}/enable")
+async def detected_move(house_name: str, room_name: str):
+    room = rooms[room_name]
+    room.change_detection_mode(True)
+    return {"OK": "OK"}
+
+
+@app.get("/house/{house_name}/room/{room_name}/disable")
+async def detected_move(house_name: str, room_name: str):
+    room = rooms[room_name]
+    room.change_detection_mode(False)
+    return {"OK": "OK"}

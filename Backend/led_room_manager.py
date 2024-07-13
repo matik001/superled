@@ -31,23 +31,33 @@ class LedRoomManager:
         self.color = color
         self.is_on = False
         self.duration_seconds = duration_seconds
+        self.is_detection_enabled = True
 
-    def set_color(self, color:Color) -> None:
+    def _set_color(self, color:Color) -> None:
         response = requests.get(f'{self.room}/s/{color}/colorFadeMs/300')
         response.close()
 
+    def switch(self, on:bool) -> None:
+        self.is_on = on
+        if on:
+            self._set_color(self.color)
+        else:
+            self._set_color(Color(0,0,0,0))
+
     def handle_detected_move(self) -> None:
+        if not self.is_detection_enabled:
+            return None
         if self.sunrise_api.is_daylight_now():
             return None
         prev_move = self.last_move
         self.last_move = datetime.datetime.utcnow()
         if self.is_on:
             return None
-
-        self.is_on = True
-        self.set_color(self.color)
+        self.switch(True)
 
     def should_switch_off_light(self) -> bool:
+        if not self.is_detection_enabled:
+            return
         if not self.is_on:
             return False
         switch_off_time = self.last_move + datetime.timedelta(seconds=self.duration_seconds)
@@ -57,5 +67,14 @@ class LedRoomManager:
 
     def switch_off_lights_if_needed(self) -> None:
         if self.should_switch_off_light():
-            self.is_on = False
-            self.set_color(Color(0,0,0,0))
+            self.switch(False)
+
+    def change_detection_mode(self, enabled:bool) -> None:
+        if enabled == self.is_detection_enabled:
+            return
+        self.is_detection_enabled = enabled
+        if enabled:
+            self.handle_detected_move()
+        else:
+            self.switch(False)
+
