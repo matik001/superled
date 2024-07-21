@@ -6,26 +6,33 @@ import requests
 from sunrise_api import SunriseSunsetAPI
 
 
-class Room(str, Enum):
-    LIVING_ROOM = 'http://duzypokoj.light'
-    # SOUTH = 'south'
 
 class Color:
-    def __init__(self, r:int, g:int, b:int, w:int):
+    def __init__(self, r: int, g: int, b: int, w: int):
         self.r = r
         self.g = g
         self.b = b
         self.w = w
+
+    def from_str(text: str):
+        r = int(text[0:2], 16)
+        g = int(text[2:4], 16)
+        b = int(text[4:6], 16)
+        w = int(text[6:8], 16)
+        return Color(r, g, b, w)
+
     def __str__(self):
         return f'{self.r:02x}{self.g:02x}{self.b:02x}{self.w:02x}00'
+
+
 # 0000000000  - none
 # ff00000000  - red
 # 00ff000000  - green
 # 0000ff0000  - blue
 # 000000ff00  - white
 class LedRoomManager:
-    def __init__(self, room: Room, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int):
-        self.room = room
+    def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int):
+        self.url = url
         self.last_move = datetime.datetime.now()
         self.sunrise_api = sunrise_api
         self.color = color
@@ -33,16 +40,16 @@ class LedRoomManager:
         self.duration_seconds = duration_seconds
         self.is_detection_enabled = True
 
-    def _set_color(self, color:Color) -> None:
-        response = requests.get(f'{self.room}/s/{color}/colorFadeMs/300')
+    def _set_color(self, color: Color) -> None:
+        response = requests.get(f'{self.url}/s/{color}/colorFadeMs/300')
         response.close()
 
-    def switch(self, on:bool) -> None:
+    def switch(self, on: bool) -> None:
         self.is_on = on
         if on:
             self._set_color(self.color)
         else:
-            self._set_color(Color(0,0,0,0))
+            self._set_color(Color(0, 0, 0, 0))
 
     def handle_detected_move(self) -> None:
         if not self.is_detection_enabled:
@@ -69,7 +76,7 @@ class LedRoomManager:
         if self.should_switch_off_light():
             self.switch(False)
 
-    def change_detection_mode(self, enabled:bool) -> None:
+    def change_detection_mode(self, enabled: bool) -> None:
         if enabled == self.is_detection_enabled:
             return
         self.is_detection_enabled = enabled
@@ -77,4 +84,3 @@ class LedRoomManager:
             self.handle_detected_move()
         else:
             self.switch(False)
-
