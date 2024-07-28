@@ -1,12 +1,17 @@
 import gc
-import math
+# import math
 
 from machine import Pin, ADC
 from time import sleep
 import urequests
 # import json
 import network
+import micropython
+DEBUG = 1
 
+def debug(text: str):
+    if DEBUG == 1:
+        print(text)
 
 wlan = network.WLAN(network.STA_IF)
 
@@ -24,9 +29,9 @@ class NotifierAPI:
         wlan.active(True)
         wlan.connect(self.ssid, self.password)
         while not wlan.isconnected():
-            print('Connecting to network...')
+            debug('Connecting to network...')
             sleep(1)
-        print("Network connected")
+        debug("Network connected")
 
     def notify_detected(self):
         self.connect_network()
@@ -44,31 +49,53 @@ class NotifierAPI:
         response.close()
 
 
-notifier = NotifierAPI('http://192.168.0.87:6767', 'hetmanska', 'living_room', 'LAPA', 'staryduren123')
-notifier.connect_network()
 
-led = Pin(2, Pin.OUT)
-switch = Pin(5, Pin.IN, Pin.PULL_UP)
-adc = ADC(0)
+def free(full=True):
+  gc.collect()
+  F = gc.mem_free()
+  A = gc.mem_alloc()
+  T = F+A
+  P = '{0:.2f}%'.format(F/T*100)
+  if not full: return P
+  else : return ('Total:{0} Free:{1} ({2})'.format(T,F,P))
 
-val_switch_prev = -1
-val_adc_prev = -1
-adc_tolerance = 200
-while True:
-    try:
-        gc.collect()
-        val_adc = adc.read_u16()
-        val_switch = int(switch.value())
-        if val_switch != val_switch_prev:
-            print("Changed switch: " + str(val_switch))
-            val_switch_prev = val_switch
-            notifier.notify_switch(val_switch)
-        if math.fabs(val_adc_prev - val_adc) > adc_tolerance:
-            print("Changed adc: " + str(val_adc))
+# @micropython.native
+def main_loop():
+    notifier = NotifierAPI('http://192.168.0.87:8000', 'hetmanska', 'living_room', 'LAPA', 'staryduren123')
+    notifier.connect_network()
+
+    led = Pin(2, Pin.OUT)
+
+    switch = Pin(5, Pin.IN, Pin.PULL_UP)
+    read_switch = switch.value
+
+    adc = ADC(0)
+    read_adc = adc.read_u16
+
+    val_switch_prev = -1
+    val_adc_prev = -1
+    adc_tolerance = micropython.const(200)
+
+    notify_fn = notifier.notify_adc
+
+    while True:
+        try:
+            # gc.collect()
+            val_adc = read_adc()
+            val_switch = read_switch()
+            # if val_switch != val_switch_prev:
+            #     debug("Changed switch: " + str(val_switch))
+            #     val_switch_prev = val_switch
+            #     notifier.notify_switch(val_switch)
+            # if math.fabs(val_adc_prev - val_adc) > adc_tolerance:
+            debug("Changed adc: " + str(val_adc))
+            debug(free())
             val_adc_prev = val_adc
-            notifier.notify_adc(val_adc)
+            notify_fn(val_adc)
 
-    except Exception as e:
-        print(e)
-        import machine
-        machine.reset()
+        except Exception as e:
+            debug(str(e))
+            import machine
+            machine.reset()
+
+main_loop()

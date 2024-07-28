@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from db.db_init import get_db, Base, engine
 from db.models.house import House
 
-
 import datetime
 from enum import Enum
 from typing import Dict
@@ -27,16 +26,16 @@ for house in houses:
     managers_dict[house.name] = {}
     for room in house.rooms:
         color = Color.from_str(room.desired_color)
-        managers_dict[house.name][room.name] = LedRoomManager(room.url, sunrise_api, color, room.detection_time)
+        managers_dict[house.name][room.name] = LedRoomManager(room.url, sunrise_api, color, room.detection_time, room.max_adc, room.min_adc)
 
 app = FastAPI()
 
 async def turn_off_lights_loop():
     while True:
         await asyncio.sleep(1)
-        for house in managers_dict.values():
-            for room in house.values():
-                room.switch_off_lights_if_needed()
+        # for house in managers_dict.values():
+        #     for room in house.values():
+        #         room.switch_off_lights_if_needed()
 
 @app.on_event("startup")
 async def startup_event():
@@ -51,9 +50,33 @@ async def detected_move(house_name: str, room_name: str):
 
 
 @app.get("/house/{house_name}/room/{room_name}/switch/{switch_state}")
-async def switch_change(house_name: str, room_name: str, switch_state: str, db: Session = Depends(get_db)):
-    is_switched = switch_state == '1'
+async def switch_change(house_name: str, room_name: str, switch_state: int, db: Session = Depends(get_db)):
+    is_switched = switch_state == 1
     room = managers_dict[house_name][room_name]
+    print("Switch state is {}".format(is_switched))
     room.change_detection_mode(is_switched)
     return {"OK": "OK"}
+
+
+
+@app.get("/house/{house_name}/room/{room_name}/adc/{adc_value}")
+async def adc_change(house_name: str, room_name: str, adc_value: int, db: Session = Depends(get_db)):
+    adc_value = int(adc_value)
+    room = managers_dict[house_name][room_name]
+    print("Adc value is {}".format(adc_value))
+    proc = (adc_value - room.min_adc) / (room.max_adc - room.min_adc)
+    proc = min(max(proc, 0), 1)
+    (h, s, v) = room.color.to_hsv()
+    if room.is_detection_enabled:
+        v = proc
+        room.color = Color.from_hsv(h, s, v)
+        room.switch(True)
+    else:
+        h = proc
+        room.color = Color.from_hsv(h, 1, 1)
+        room.switch(True)
+    # room
+    # room.change_detection_mode(is_switched)
+    return {"OK": "OK"}
+
 

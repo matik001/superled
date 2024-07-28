@@ -5,15 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fb0ebc29-37b5-4959-b151-9e51c5c27187" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/../Backend/.env.example" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Backend/db/db_init.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Backend/db/models/house.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Backend/db/models/room.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Backend/dtos/house_dto.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Backend/dtos/room_dto.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Backend/.dockerignore" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/.dockerignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../Backend/led_room_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/led_room_manager.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../Backend/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Backend/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/requirements.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -125,7 +119,11 @@
       <workItem from="1720565575139" duration="1539000" />
       <workItem from="1720626527064" duration="835000" />
       <workItem from="1721339173725" duration="6227000" />
-      <workItem from="1721560555859" duration="8932000" />
+      <workItem from="1721560555859" duration="13705000" />
+      <workItem from="1721766000320" duration="599000" />
+      <workItem from="1721771493117" duration="115000" />
+      <workItem from="1721780656624" duration="15144000" />
+      <workItem from="1722188910281" duration="853000" />
     </task>
     <servers />
   </component>

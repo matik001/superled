@@ -4,8 +4,7 @@ from enum import Enum
 import requests
 
 from sunrise_api import SunriseSunsetAPI
-
-
+import colorsys
 
 class Color:
     def __init__(self, r: int, g: int, b: int, w: int):
@@ -21,6 +20,19 @@ class Color:
         w = int(text[6:8], 16)
         return Color(r, g, b, w)
 
+    def to_hsv(self):
+        (h, s, v) = colorsys.rgb_to_hsv(self.r/255, self.g/255, self.b/255)
+        return (h, s, v)
+
+    def from_hsv(h: float, s: float, v: float):
+        res = Color(0,0,0,0)
+        (r, g, b) = colorsys.hsv_to_rgb(h, s, v)
+        res.r = int(255*r)
+        res.g = int(255*g)
+        res.b = int(255*b)
+        return res
+
+
     def __str__(self):
         return f'{self.r:02x}{self.g:02x}{self.b:02x}{self.w:02x}00'
 
@@ -31,7 +43,7 @@ class Color:
 # 0000ff0000  - blue
 # 000000ff00  - white
 class LedRoomManager:
-    def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int):
+    def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int, max_adc: int, min_adc: int):
         self.url = url
         self.last_move = datetime.datetime.now()
         self.sunrise_api = sunrise_api
@@ -39,9 +51,12 @@ class LedRoomManager:
         self.is_on = False
         self.duration_seconds = duration_seconds
         self.is_detection_enabled = True
+        self.max_adc = max_adc
+        self.min_adc = min_adc
 
     def _set_color(self, color: Color) -> None:
         response = requests.get(f'{self.url}/s/{color}/colorFadeMs/300')
+        print("Set color: " + str(color))
         response.close()
 
     def switch(self, on: bool) -> None:
@@ -82,5 +97,6 @@ class LedRoomManager:
         self.is_detection_enabled = enabled
         if enabled:
             self.handle_detected_move()
+            self.switch(True)
         else:
             self.switch(False)
