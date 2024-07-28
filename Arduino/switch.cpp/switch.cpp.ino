@@ -2,7 +2,7 @@
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
 
-const char* ssid = "piesikot";
+const char* ssid = "Piesikot";
 const char* password = "kotipies";
 
 String URL = "http://192.168.100.17:6767";
@@ -17,7 +17,7 @@ const int SWITCH_PIN = 5;
 const int LED_PIN = 2;
 
 
-const int ADC_TOLERANCE = 5;
+const int ADC_TOLERANCE = 12;
 
 void connect_wifi(){
   digitalWrite(LED_PIN, 0);
