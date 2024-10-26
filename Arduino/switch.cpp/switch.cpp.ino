@@ -17,23 +17,23 @@ const int SWITCH_PIN = 5;
 const int LED_PIN = 2;
 
 
-const int ADC_TOLERANCE = 12;
+const int ADC_TOLERANCE = 7;
 
 void connect_wifi(){
   digitalWrite(LED_PIN, 0);
   WiFi.begin(ssid, password);
-  Serial.println("Connecting");
+  // Serial.println("Connecting");
   while(WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("");
-  Serial.print("Connected to WiFi network with IP Address: ");
-  Serial.println(WiFi.localIP());
+  // Serial.println("");
+  // Serial.print("Connected to WiFi network with IP Address: ");
+  // Serial.println(WiFi.localIP());
   digitalWrite(LED_PIN, 1);
 }
 void setup() {
-  Serial.begin(115200); 
+  // Serial.begin(115200); 
   pinMode(SWITCH_PIN, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT);
 }
@@ -58,23 +58,28 @@ int prev_switch = -1;
 int prev_adc = -1;
 void loop() {
   if(WiFi.status() == WL_CONNECTED){
+    unsigned long loop_time = millis();
+    // Yielding for 100ms
+    while(millis()-loop_time<30){
+      yield();
+    }
 
     int adc_val = analogRead(ADC_PIN);
     int switch_val = digitalRead(SWITCH_PIN);
 
     if(abs(adc_val - prev_adc) > ADC_TOLERANCE){
       prev_adc = adc_val;
-      Serial.println("Change adc");
+      // Serial.println("Change adc");
       sendADC(adc_val);
     }
     if(switch_val != prev_switch){
       prev_switch = switch_val;
-      Serial.println("Change switch");
+      // Serial.println("Change switch");
       sendSwitch(switch_val);
     }
   }
   else {
-    Serial.println("WiFi Disconnected");
+    // Serial.println("WiFi Disconnected");
     connect_wifi();
   }
 }

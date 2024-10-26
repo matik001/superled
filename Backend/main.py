@@ -33,9 +33,9 @@ app = FastAPI()
 async def turn_off_lights_loop():
     while True:
         await asyncio.sleep(1)
-        # for house in managers_dict.values():
-        #     for room in house.values():
-        #         room.switch_off_lights_if_needed()
+        for house in managers_dict.values():
+            for room in house.values():
+                room.switch_off_lights_if_needed()
 
 @app.on_event("startup")
 async def startup_event():
@@ -54,7 +54,7 @@ async def switch_change(house_name: str, room_name: str, switch_state: int, db: 
     is_switched = switch_state == 1
     room = managers_dict[house_name][room_name]
     print("Switch state is {}".format(is_switched))
-    room.change_detection_mode(is_switched)
+    room.set_enable(is_switched)
     return {"OK": "OK"}
 
 
@@ -66,17 +66,7 @@ async def adc_change(house_name: str, room_name: str, adc_value: int, db: Sessio
     print("Adc value is {}".format(adc_value))
     proc = (adc_value - room.min_adc) / (room.max_adc - room.min_adc)
     proc = min(max(proc, 0), 1)
-    (h, s, v) = room.color.to_hsv()
-    if room.is_detection_enabled:
-        v = proc
-        room.color = Color.from_hsv(h, s, v)
-        room.switch(True)
-    else:
-        h = proc
-        room.color = Color.from_hsv(h, 1, 1)
-        room.switch(True)
-    # room
-    # room.change_detection_mode(is_switched)
+    room.change_adc(proc)
     return {"OK": "OK"}
 
 
