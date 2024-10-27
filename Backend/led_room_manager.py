@@ -1,4 +1,7 @@
+import asyncio
 import datetime
+import random
+import time
 from enum import Enum
 from typing import List
 
@@ -28,14 +31,15 @@ class Color:
         self.h = h
         self.s = s
         self.v = v
-        self.w = w
+        self.w = w/255
     #
     def to_rgbw(self):
         (r, g, b) = colorsys.hsv_to_rgb(self.h, self.s, self.v)
         r = int(255*r)
         g = int(255*g)
         b = int(255*b)
-        return r, g, b, self.w
+        w = int(255*self.w * self.v)
+        return r, g, b, w
 
 
     def __str__(self):
@@ -49,14 +53,20 @@ class Color:
 # 0000ff0000  - blue
 # 000000ff00  - white
 
+class HistoryEventType(Enum):
+    SWITCH= 1
+    ADC = 2
 class HistoryEvent:
-    is_on: bool
+    is_light_on: bool
     date: datetime.datetime
-
-    def __init__(self, is_on: bool, date: datetime.datetime):
+    type: HistoryEventType
+    adc_val: float
+    def __init__(self, is_light_on: bool, date: datetime.datetime, type: HistoryEventType, adc_val: float = 0.0) -> None:
         super().__init__()
-        self.is_on = is_on
+        self.is_light_on = is_light_on
         self.date = date
+        self.type = type
+        self.adc_val = adc_val
 
 class ColorMode(Enum):
     BRIGHTNESS = 1
@@ -77,13 +87,15 @@ class LedRoomManager:
         self.max_adc = max_adc
         self.min_adc = min_adc
         self.history:List[HistoryEvent] = []
+        self.prev_adc_value = 0
+        self.ADC_THRESSHOLD = 20
 
     def _apply_color(self, color: Color, fade_ms = 300) -> None:
         url = f'{self.url}/s/{color}'
         if fade_ms > 0:
             url += f'/colorFadeMs/{fade_ms}'
         response = requests.get(url)
-        print("Apply color: " + str(color))
+        print(f"Apply color: {color.h} {color.s} {color.v} {color.w} {color}")
         response.close()
 
     def set_enable(self, enabled: bool) -> None:
@@ -96,7 +108,7 @@ class LedRoomManager:
         else:
             self.set_light(False)
 
-        self.history.append(HistoryEvent(self.is_light_on, datetime.datetime.utcnow()))
+        self.history.append(HistoryEvent(self.is_light_on, datetime.datetime.utcnow(), HistoryEventType.SWITCH))
         mode = self.get_current_mode()
         if mode == ColorMode.CRAZY:
             print("PANIC!!!!")
@@ -133,38 +145,83 @@ class LedRoomManager:
         if self.should_switch_off_light():
             self.set_light(False)
 
+    def trim_history(self):
+        if len(self.history) == 0:
+            return
+        max_seconds_diff = 3
+        prev = self.history[0]
+        new_history = []
+        for event in self.history:
+            if (event.date - prev.date).total_seconds() > max_seconds_diff:
+                new_history = []
+            new_history.append(event)
+            prev = event
+        if (datetime.datetime.utcnow() - prev.date).total_seconds() > max_seconds_diff:
+            new_history = []
+        self.history = new_history
 
     def get_current_mode(self) -> ColorMode:
-        from_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=10)
-        offs = filter(lambda c: c.date > from_time and not c.is_light_on, self.history)
+        self.trim_history()
+        offs = [a for a in self.history if a.type == HistoryEventType.SWITCH and not a.is_light_on]
         if len(offs) == 0:
             return ColorMode.BRIGHTNESS
         elif len(offs) == 1:
-            return ColorMode.BRIGHTNESS
+            return ColorMode.HUE
+        # elif len(offs) == 2:
+        #     return ColorMode.SATURATION
         elif len(offs) == 2:
-            return ColorMode.SATURATION
-        elif len(offs) == 3:
             return ColorMode.WHITE
-        elif len(offs) >= 4:
+        elif len(offs) >= 3:
             return ColorMode.CRAZY  # crazy + clear history
 
-    def change_adc(self, value: float) -> None:
+    def change_adc(self, adc_value: int) -> None:
+        print("Adc value is {}".format(adc_value))
+        if abs(self.prev_adc_value - adc_value) < self.ADC_THRESSHOLD:
+            return
+        self.prev_adc_value = adc_value
+
+        value = (adc_value - self.min_adc) / (self.max_adc - self.min_adc)
+        value = min(max(value, 0), 1)
+
         if not self.is_enabled:
             return None
 
         mode = self.get_current_mode()
+
+        self.color.s = 1
         if mode == ColorMode.BRIGHTNESS:
             self.color.v = value
             self._apply_color(self.color)
         if mode == ColorMode.HUE:
             self.color.h = value
             self._apply_color(self.color)
-        if mode == ColorMode.SATURATION:
-            self.color.s = value
-            self._apply_color(self.color)
+        # if mode == ColorMode.SATURATION:
+        #     self.color.s = value
+        #     self._apply_color(self.color)
         if mode == ColorMode.WHITE:
             self.color.w = value
             self._apply_color(self.color)
         if mode == ColorMode.CRAZY:
             print("Crazy adc")
+            asyncio.create_task(self.crazy_panic())
+
+        self.history.append(HistoryEvent(self.is_light_on, datetime.datetime.utcnow(), HistoryEventType.ADC, value))
+
+    async def crazy_panic(self) -> None:
+        for i in range(50):
+            # self._apply_color(Color(0,0,1,1), 0)
+            # time.sleep(0.03)
+            self._apply_color(Color(0,0,0,0), 0)
+            time.sleep(0.05)
+            # await asyncio.sleep(0.03)
+            # self._apply_color(Color(random.random(),1,1,0.1), 0)
+            self._apply_color(Color(0,1,1,0.0), 0)
+            time.sleep(0.05)
+            self._apply_color(Color(0, 0, 0, 0), 0)
+            time.sleep(0.05)
+            self._apply_color(Color(0.666, 1, 1, 0.0), 0)
+            time.sleep(0.05)
+
+            # await asyncio.sleep(0.03)
+
 

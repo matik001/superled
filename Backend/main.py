@@ -25,7 +25,7 @@ managers_dict: Dict[str, Dict[str, LedRoomManager]] = {}
 for house in houses:
     managers_dict[house.name] = {}
     for room in house.rooms:
-        color = Color.from_str(room.desired_color)
+        color = Color.from_str_blebox(room.desired_color)
         managers_dict[house.name][room.name] = LedRoomManager(room.url, sunrise_api, color, room.detection_time, room.max_adc, room.min_adc)
 
 app = FastAPI()
@@ -63,10 +63,7 @@ async def switch_change(house_name: str, room_name: str, switch_state: int, db: 
 async def adc_change(house_name: str, room_name: str, adc_value: int, db: Session = Depends(get_db)):
     adc_value = int(adc_value)
     room = managers_dict[house_name][room_name]
-    print("Adc value is {}".format(adc_value))
-    proc = (adc_value - room.min_adc) / (room.max_adc - room.min_adc)
-    proc = min(max(proc, 0), 1)
-    room.change_adc(proc)
+    room.change_adc(adc_value)
     return {"OK": "OK"}
 
 
