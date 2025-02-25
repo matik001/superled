@@ -1,4 +1,7 @@
 from dotenv import load_dotenv
+
+from db.models.room import ColorType
+
 load_dotenv()
 from sqlalchemy.orm import Session
 
@@ -26,7 +29,7 @@ for house in houses:
     managers_dict[house.name] = {}
     for room in house.rooms:
         color = Color.from_str_blebox(room.desired_color)
-        managers_dict[house.name][room.name] = LedRoomManager(room.url, sunrise_api, color, room.detection_time, room.max_adc, room.min_adc)
+        managers_dict[house.name][room.name] = LedRoomManager(room.url, sunrise_api, color, room.detection_time, room.max_adc, room.min_adc, room)
 
 app = FastAPI()
 
@@ -35,7 +38,8 @@ async def turn_off_lights_loop():
         await asyncio.sleep(1)
         for house in managers_dict.values():
             for room in house.values():
-                room.switch_off_lights_if_needed()
+                if room.room.use_motion_detector:
+                    room.switch_off_lights_if_needed()
 
 @app.on_event("startup")
 async def startup_event():

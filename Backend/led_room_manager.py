@@ -7,10 +7,13 @@ from typing import List
 
 import requests
 
+from db.models.room import Room, ColorType
 from sunrise_api import SunriseSunsetAPI
 import colorsys
 
+CLOSETS_IPS = ['http://192.168.100.43', 'http://192.168.100.54', 'http://192.168.100.57']
 class Color:
+    # w przypadku CCT (v - janosc, h - stopien bialo-zolty)
     def __init__(self, h:float, s:float, v:float, w:float) -> None:
         self.h = h
         self.s = s
@@ -41,6 +44,11 @@ class Color:
         w = int(255*self.w * self.v)
         return r, g, b, w
 
+    def to_cct(self):
+        cc = int(min(1.0, self.h*2)*self.v*255)
+        cw = int(min(1.0, abs(2.0-2*self.h))*self.v*255)
+        return f'{cc:02x}{cw:02x}{cc:02x}{cw:02x}'
+
 
     def __str__(self):
         (r,g,b,w) = self.to_rgbw()
@@ -70,13 +78,14 @@ class HistoryEvent:
 
 class ColorMode(Enum):
     BRIGHTNESS = 1
-    HUE = 2
+    HUE = 2 # w przypadku CCT bialo zolty mix
     SATURATION = 3
     WHITE = 4
-    CRAZY = 5
+    CLOSET = 5
+    CRAZY = 6
 
 class LedRoomManager:
-    def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int, max_adc: int, min_adc: int):
+    def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int, max_adc: int, min_adc: int, room: Room):
         self.url = url
         self.last_move = datetime.datetime.now()
         self.sunrise_api = sunrise_api
@@ -89,14 +98,30 @@ class LedRoomManager:
         self.history:List[HistoryEvent] = []
         self.prev_adc_value = 0
         self.ADC_THRESSHOLD = 20
+        self.room = room
 
     def _apply_color(self, color: Color, fade_ms = 300) -> None:
-        url = f'{self.url}/s/{color}'
+        color_str = str(color)
+        if self.room.type == ColorType.CCT_BLEBOX:
+            color_str = color.to_cct()
+
+        url = f'{self.url}/s/{color_str}'
         if fade_ms > 0:
             url += f'/colorFadeMs/{fade_ms}'
         response = requests.get(url)
         print(f"Apply color: {color.h} {color.s} {color.v} {color.w} {color}")
         response.close()
+
+
+    def _set_closet_color(self, brightness: float) -> None:
+        value = int(brightness*255)
+        print(f"Apply closet brightness: {value}")
+        for ip in CLOSETS_IPS:
+            url = f'{ip}/json/state'
+            response = requests.post(url, json={'on': value > 2, 'bri': str(value)})
+            response.close()
+            # break
+
 
     def set_enable(self, enabled: bool) -> None:
         if enabled == self.is_enabled:
@@ -117,9 +142,12 @@ class LedRoomManager:
         self.is_light_on = on
         if on:
             self._apply_color(self.color)
+            if self.room.type == ColorType.WRGB_BLEXBOX_WITH_CLOSET:
+                self._set_closet_color(self.room.closet_brightness/255.0)
         else:
             self._apply_color(Color(0, 0, 0, 0))
-
+            if self.room.type == ColorType.WRGB_BLEXBOX_WITH_CLOSET:
+                self._set_closet_color(0)
 
     def handle_detected_move(self) -> None:
         if not self.is_enabled:
@@ -171,7 +199,9 @@ class LedRoomManager:
         #     return ColorMode.SATURATION
         elif len(offs) == 2:
             return ColorMode.WHITE
-        elif len(offs) >= 3:
+        elif len(offs) == 3:
+            return ColorMode.CLOSET
+        elif len(offs) >= 4:
             return ColorMode.CRAZY  # crazy + clear history
 
     def change_adc(self, adc_value: int) -> None:
@@ -201,6 +231,10 @@ class LedRoomManager:
         if mode == ColorMode.WHITE:
             self.color.w = value
             self._apply_color(self.color)
+        if mode == ColorMode.CLOSET:
+            self.color.v = value
+            # self._apply_color(self.color)
+            self._set_closet_color(value)
         if mode == ColorMode.CRAZY:
             print("Crazy adc")
             asyncio.create_task(self.crazy_panic())

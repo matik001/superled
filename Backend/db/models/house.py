@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship, Mapped
 
 from db.db_init import Base
-from db.models.room import Room
+# from db.models.room import Room
 
 
 class House(Base):
