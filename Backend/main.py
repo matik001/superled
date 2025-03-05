@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
 
 from db.models.room import ColorType
+from mqtt.ActionHandlers import ActionHandlers
+from mqtt.LedMQTT import LedMQTT
 
 load_dotenv()
 from sqlalchemy.orm import Session
@@ -31,6 +33,9 @@ for house in houses:
         color = Color.from_str_blebox(room.desired_color)
         managers_dict[house.name][room.name] = LedRoomManager(room.url, sunrise_api, color, room.detection_time, room.max_adc, room.min_adc, room)
 
+action_handlers = ActionHandlers(managers_dict)
+mqtt = LedMQTT(action_handlers)
+
 app = FastAPI()
 
 async def turn_off_lights_loop():
@@ -44,6 +49,7 @@ async def turn_off_lights_loop():
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(turn_off_lights_loop())
+    mqtt.start()
 
 
 @app.get("/house/{house_name}/room/{room_name}/detected")
@@ -55,19 +61,12 @@ async def detected_move(house_name: str, room_name: str):
 
 @app.get("/house/{house_name}/room/{room_name}/switch/{switch_state}")
 async def switch_change(house_name: str, room_name: str, switch_state: int, db: Session = Depends(get_db)):
-    is_switched = switch_state == 1
-    room = managers_dict[house_name][room_name]
-    print("Switch state is {}".format(is_switched))
-    room.set_enable(is_switched)
-    return {"OK": "OK"}
+    return action_handlers.switch_change(house_name, room_name, switch_state)
 
 
 
 @app.get("/house/{house_name}/room/{room_name}/adc/{adc_value}")
 async def adc_change(house_name: str, room_name: str, adc_value: int, db: Session = Depends(get_db)):
-    adc_value = int(adc_value)
-    room = managers_dict[house_name][room_name]
-    room.change_adc(adc_value)
-    return {"OK": "OK"}
+    return action_handlers.adc_change(house_name, room_name, adc_value)
 
 
