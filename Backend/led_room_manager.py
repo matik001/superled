@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import random
 import time
 from enum import Enum
 from typing import List
@@ -95,7 +94,7 @@ class ColorMode(Enum):
 class LedRoomManager:
     def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int, max_adc: int,
                  min_adc: int, room: Room):
-        self.url = url
+        self.urls = url.split(',')
         self.last_move = datetime.datetime.now()
         self.sunrise_api = sunrise_api
         self.color = color
@@ -113,21 +112,26 @@ class LedRoomManager:
         color_str = str(color)
         if self.room.type == ColorType.CCT_BLEBOX:
             color_str = color.to_cct()
+        for url in self.urls:
+            url = f'{url}/s/{color_str}'
+            if fade_ms > 0:
+                url += f'/colorFadeMs/{fade_ms}'
 
-        url = f'{self.url}/s/{color_str}'
-        if fade_ms > 0:
-            url += f'/colorFadeMs/{fade_ms}'
-        response = requests.get(url)
+            try:
+                response = requests.get(url, timeout=0.0000000001)
+            except requests.exceptions.ReadTimeout:
+                pass
         print(f"Apply color: {color.h} {color.s} {color.v} {color.w} {color_str}")
-        response.close()
 
     def _set_closet_color(self, brightness: float) -> None:
         value = int(brightness * 255)
         print(f"Apply closet brightness: {value}")
         for ip in CLOSETS_IPS:
             url = f'{ip}/json/state'
-            response = requests.post(url, json={'on': value > 2, 'bri': str(value)})
-            response.close()
+            try:
+                response = requests.post(url, json={'on': value > 2, 'bri': str(value)}, timeout=0.0000000001)
+            except requests.exceptions.ReadTimeout:
+                pass
             # break
 
     def set_enable(self, enabled: bool) -> None:
