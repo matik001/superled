@@ -26,5 +26,6 @@ class Room(Base):
     closet_brightness = Column(Integer, default=0)
     type = Column(Enum(ColorType), default=ColorType.WRGB_BLEXBOX)
     use_motion_detector = Column(Boolean, default=False)
+    mqtt_topic = Column(String(100), default=False)
     house = relationship("House", back_populates="rooms")
     house_id = Column(Integer, ForeignKey("houses.id"))
