@@ -18,34 +18,37 @@ class LedMQTT:
                     self.rooms.append((house_name, room.room))
 
     def get_room_milight_event_cct(self, house_name: str, room: Room):
-        async def on_milight_event_cct(payload: str, topic: str):
+        room_name = room.name
+
+        def on_milight_event_cct(payload: str, topic: str):
             obj = json.loads(payload)
-            room_name = room.name
             if "brightness" in obj:
                 brightness = obj['brightness']
-                print(f"Ustawiona jasność: {brightness}") # 0-255
-                await self.action_handler.adc_change_absolute(house_name, room_name, brightness/255.0, ColorMode.BRIGHTNESS)
+                print(f"Ustawiona jasność: {brightness}")  # 0-255
+                self.action_handler.adc_change_absolute(house_name, room_name, brightness / 255.0,
+                                                              ColorMode.BRIGHTNESS)
 
             if obj.get("button_id") == 3:
                 cct_color = obj.get('argument')  # 0 - 100
                 print(f"Color: {cct_color}")
                 # await self.action_handler.switch_change(house_name, room_name, True)
-                await self.action_handler.adc_change_absolute(house_name, room_name, cct_color/100.0, ColorMode.HUE)
+                self.action_handler.adc_change_absolute(house_name, room_name, cct_color / 100.0, ColorMode.HUE)
 
             if "state" in obj:
                 is_on = 1 if obj["state"] == "ON" else 0
                 print(f'IS_ON: {is_on}')
-                await self.action_handler.switch_change(house_name, room_name, is_on)
+                self.action_handler.switch_change(house_name, room_name, is_on)
 
             if obj.get("command") == 'night_mode':
-                await self.action_handler.switch_change(house_name, room_name, True)
-                await self.action_handler.adc_change_absolute(house_name, room_name, 0.1, ColorMode.HUE)
-        return on_milight_event_cct
+                self.action_handler.switch_change(house_name, room_name, True)
+                self.action_handler.adc_change_absolute(house_name, room_name, 0.1, ColorMode.HUE)
 
+        return on_milight_event_cct
 
     def start(self):
         self.mqtt.connect_mqtt()
         for house_name, room in self.rooms:
             if room.type == ColorType.CCT_BLEBOX:
+                print(f'subscribing mqtt for {room.name} in {house_name} on topic {room.mqtt_topic}')
                 self.mqtt.subscribe(room.mqtt_topic, self.get_room_milight_event_cct(house_name, room))
         self.mqtt.run()

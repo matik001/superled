@@ -48,8 +48,8 @@ class Color:
         return r, g, b, w
 
     def to_cct(self):
-        cc = int(min(1.0, self.h * 2) * self.v * 255)
-        cw = int(min(1.0, abs(2.0 - 2 * self.h)) * self.v * 255)
+        cw = int(min(1.0, self.h * 2) * self.v * 255)
+        cc = int(min(1.0, abs(2.0 - 2 * self.h)) * self.v * 255)
         return f'{cc:02x}{cw:02x}{cc:02x}{cw:02x}'
 
     def __str__(self):

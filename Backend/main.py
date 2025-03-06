@@ -46,27 +46,28 @@ async def turn_off_lights_loop():
                 if room.room.use_motion_detector:
                     room.switch_off_lights_if_needed()
 
+mqtt.start()
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(turn_off_lights_loop())
-    mqtt.start()
 
 
 @app.get("/house/{house_name}/room/{room_name}/detected")
-async def detected_move(house_name: str, room_name: str):
+def detected_move(house_name: str, room_name: str):
     room = managers_dict[house_name][room_name]
     room.handle_detected_move()
     return {"OK": "OK"}
 
 
 @app.get("/house/{house_name}/room/{room_name}/switch/{switch_state}")
-async def switch_change(house_name: str, room_name: str, switch_state: int, db: Session = Depends(get_db)):
+def switch_change(house_name: str, room_name: str, switch_state: int, db: Session = Depends(get_db)):
     return action_handlers.switch_change(house_name, room_name, switch_state)
 
 
 
 @app.get("/house/{house_name}/room/{room_name}/adc/{adc_value}")
-async def adc_change(house_name: str, room_name: str, adc_value: int, db: Session = Depends(get_db)):
+def adc_change(house_name: str, room_name: str, adc_value: int, db: Session = Depends(get_db)):
     return action_handlers.adc_change(house_name, room_name, adc_value)
 
 

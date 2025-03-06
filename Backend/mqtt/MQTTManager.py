@@ -31,7 +31,7 @@ class MQTTManager:
         client.connect(self.host, self.port)
         self.client = client
 
-    def subscribe(self, topic: str, handler: Callable[[Any, str],  Coroutine[Any, Any, None]]):
+    def subscribe_coroutine(self, topic: str, handler: Callable[[Any, str],  Coroutine[Any, Any, None]]):
         def on_message(client, userdata, msg):
             payload = msg.payload.decode()
             print(f"Received `{payload}` from `{msg.topic}` topic")
@@ -39,7 +39,17 @@ class MQTTManager:
 
         self.client.subscribe(topic)
         self.client.message_callback_add(topic, on_message)
+
+    def subscribe(self, topic: str, handler: Callable[[Any, str], None]):
+        def on_message(client, userdata, msg):
+            payload = msg.payload.decode()
+            print(f"Received `{payload}` from `{msg.topic}` topic")
+            handler(payload, msg.topic)
+
+        self.client.subscribe(topic)
+        self.client.message_callback_add(topic, on_message)
         # self.client.on_message = on_message
+
     def run(self):
         self.event_loop = asyncio.get_event_loop()
         self.client.loop_start()
