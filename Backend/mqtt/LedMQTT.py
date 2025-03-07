@@ -39,9 +39,9 @@ class LedMQTT:
                 print(f'IS_ON: {is_on}')
                 self.action_handler.switch_change(house_name, room_name, is_on)
 
-            if obj.get("command") == 'night_mode':
-                self.action_handler.switch_change(house_name, room_name, True)
-                self.action_handler.adc_change_absolute(house_name, room_name, 0.1, ColorMode.HUE)
+            # if obj.get("command") == 'night_mode':
+            #     self.action_handler.switch_change(house_name, room_name, True)
+            #     self.action_handler.adc_change_absolute(house_name, room_name, 0.1, ColorMode.HUE)
 
         return on_milight_event_cct
 
