@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import time
 from enum import Enum
+from multiprocessing.dummy import Pool
 from typing import List
 
 import requests
@@ -91,6 +92,7 @@ class ColorMode(Enum):
     CRAZY = 6
 
 
+pool = Pool(20)
 class LedRoomManager:
     def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int, max_adc: int,
                  min_adc: int, room: Room):
@@ -117,10 +119,7 @@ class LedRoomManager:
             if fade_ms > 0:
                 url += f'/colorFadeMs/{fade_ms}'
 
-            try:
-                response = requests.get(url, timeout=0.0000000001)
-            except requests.exceptions.ReadTimeout:
-                pass
+            pool.apply_async(requests.get, args=[url])
         print(f"Apply color: {color.h} {color.s} {color.v} {color.w} {color_str}")
 
     def _set_closet_color(self, brightness: float) -> None:
@@ -128,10 +127,7 @@ class LedRoomManager:
         print(f"Apply closet brightness: {value}")
         for ip in CLOSETS_IPS:
             url = f'{ip}/json/state'
-            try:
-                response = requests.post(url, json={'on': value > 2, 'bri': str(value)}, timeout=0.0000000001)
-            except requests.exceptions.ReadTimeout:
-                pass
+            pool.apply_async(requests.post, args=[url], kwds={'json': {'on': value > 2, 'bri': str(value)}})
             # break
 
     def set_enable(self, enabled: bool) -> None:
