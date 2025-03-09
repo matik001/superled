@@ -14,8 +14,8 @@ class LedMQTT:
         self.rooms = []
         for house_name, rooms in self.action_handler.managers_dict.items():
             for room in rooms.values():
-                if room.room.mqtt_topic:
-                    self.rooms.append((house_name, room.room))
+                # if room.room.mqtt_topic:
+                self.rooms.append((house_name, room.room))
 
     def get_room_milight_event_cct(self, house_name: str, room: Room):
         room_name = room.name
@@ -52,8 +52,9 @@ class LedMQTT:
         def on_custom_event_cct(payload: str, topic: str):
             obj = json.loads(payload)
             if "adc" in obj:
-                adc_value = obj['adc']
-                return self.action_handler.adc_change(house_name, room_name, adc_value)
+                adc_value = int(obj['adc'])
+                print(f"ADC: {adc_value}")  # 0-255
+                self.action_handler.adc_change(house_name, room_name, adc_value)
 
             if "state" in obj:
                 is_on = 1 if obj["state"] == "ON" else 0
@@ -67,6 +68,7 @@ class LedMQTT:
         for house_name, room in self.rooms:
             if room.type == ColorType.CCT_BLEBOX:
                 print(f'subscribing mqtt for {room.name} in {house_name} on topic {room.mqtt_topic}')
-                self.mqtt.subscribe(room.mqtt_topic, self.get_room_milight_event_cct(house_name, room))
+                if room.mqtt_topic:
+                    self.mqtt.subscribe(room.mqtt_topic, self.get_room_milight_event_cct(house_name, room))
                 self.mqtt.subscribe(f"custom/update/{house_name}/{room.name}", self.get_room_custom_event_cct(house_name, room))
         self.mqtt.run()
