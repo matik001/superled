@@ -70,5 +70,10 @@ class LedMQTT:
                 print(f'subscribing mqtt for {room.name} in {house_name} on topic {room.mqtt_topic}')
                 if room.mqtt_topic:
                     self.mqtt.subscribe(room.mqtt_topic, self.get_room_milight_event_cct(house_name, room))
-                self.mqtt.subscribe(f"custom/update/{house_name}/{room.name}", self.get_room_custom_event_cct(house_name, room))
+                else:
+                    self.mqtt.subscribe(room.mqtt_topic, self.get_room_custom_event_cct(house_name, room))
+
+            custom_topic = f"custom/update/{house_name}/{room.name}"
+            print(f'subscribing mqtt for {room.name} in {house_name} on topic {custom_topic}')
+            self.mqtt.subscribe(custom_topic, self.get_room_custom_event_cct(house_name, room))
         self.mqtt.run()
