@@ -14,7 +14,7 @@ class ActionHandlers:
         room.set_enable(is_switched)
         return {"OK": "OK"}
 
-    def adc_change_absolute(self, house_name: str, room_name: str, adc_value: float, mode: ColorMode):  # adc_value 0-1
+    def adc_change_absolute(self, house_name: str, room_name: str, adc_value: float, mode:  ColorMode | None):  # adc_value 0-1
         room = self.managers_dict[house_name][room_name]
         room.change_adc(adc_value, mode, True)
         return {"OK": "OK"}
