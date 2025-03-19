@@ -66,9 +66,9 @@ class LedMQTT:
     def start(self):
         self.mqtt.connect_mqtt()
         for house_name, room in self.rooms:
-            if room.type == ColorType.CCT_BLEBOX:
+            if room.mqtt_topic:
                 print(f'subscribing mqtt for {room.name} in {house_name} on topic {room.mqtt_topic}')
-                if room.mqtt_topic:
+                if room.type == ColorType.CCT_BLEBOX:
                     self.mqtt.subscribe(room.mqtt_topic, self.get_room_milight_event_cct(house_name, room))
                 else:
                     self.mqtt.subscribe(room.mqtt_topic, self.get_room_custom_event_cct(house_name, room))
