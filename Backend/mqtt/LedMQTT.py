@@ -33,7 +33,7 @@ class LedMQTT:
                 print(f"Color: {cct_color}")
                 # await self.action_handler.switch_change(house_name, room_name, True)
                 self.action_handler.adc_change_absolute(house_name, room_name, cct_color / 100.0,
-                                                        ColorMode.BRIGHTNESS if const_mode else None)
+                                                        ColorMode.HUE if const_mode else None)
 
             if "state" in obj:
                 is_on = 1 if obj["state"] == "ON" else 0
