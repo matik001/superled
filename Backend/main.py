@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 
-from db.models.room import ColorType
+from db.models.room import ColorType, Room
 from mqtt.ActionHandlers import ActionHandlers
 from mqtt.LedMQTT import LedMQTT
 
@@ -44,19 +44,67 @@ async def turn_off_lights_loop():
         for house in managers_dict.values():
             for room in house.values():
                 if room.room.use_motion_detector:
-                    room.switch_off_lights_if_needed()
+                    await room.switch_off_lights_if_needed()
+
+async def save_current_colors_to_db():
+    """Zapisuje aktualny kolor każdego pokoju do bazy danych"""
+    try:
+        # Pobierz nową sesję bazy danych
+        db_session = next(get_db())
+        
+        print("Zapisuję aktualny kolor pokoi do bazy danych...")
+        
+        for house_name, house_rooms in managers_dict.items():
+            for room_name, room_manager in house_rooms.items():
+                # Pobierz aktualny kolor z managera
+                current_color_hex = str(room_manager.color)
+                
+                # Znajdź pokój w bazie danych
+                db_room = db_session.query(Room).filter(
+                    Room.name == room_name
+                ).first()
+                
+                if db_room:
+                    # Zapisz aktualny kolor do bazy
+                    old_color = db_room.desired_color
+                    # Używamy setattr aby uniknąć problemów z SQLAlchemy columns
+                    setattr(db_room, 'desired_color', current_color_hex)
+                    db_session.commit()
+                    
+                    print(f"Zapisano kolor pokoju {house_name}/{room_name}: {old_color} -> {current_color_hex}")
+                else:
+                    print(f"Nie znaleziono pokoju {house_name}/{room_name} w bazie danych")
+        
+        db_session.close()
+        print("Zapisywanie kolorów zakończone pomyślnie")
+        
+    except Exception as e:
+        print(f"Błąd podczas zapisywania kolorów do bazy: {e}")
+        try:
+            db_session.close()
+        except:
+            pass
+
+async def save_colors_to_db_loop():
+    """Pętla zapisująca kolory co godzinę"""
+    while True:
+        await asyncio.sleep(3600)  # 3600 sekund = 1 godzina
+        await save_current_colors_to_db()
 
 mqtt.start()
 
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(turn_off_lights_loop())
+    asyncio.create_task(save_colors_to_db_loop())
+    # Zapisz kolory przy starcie programu
+    await save_current_colors_to_db()
 
 
 @app.get("/house/{house_name}/room/{room_name}/detected")
-def detected_move(house_name: str, room_name: str):
+async def detected_move(house_name: str, room_name: str):
     room = managers_dict[house_name][room_name]
-    room.handle_detected_move()
+    await room.handle_detected_move()
     return {"OK": "OK"}
 
 #

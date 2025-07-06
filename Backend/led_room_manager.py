@@ -1,11 +1,12 @@
-import asyncio
 import datetime
 import time
+import asyncio
 from enum import Enum
 from multiprocessing.dummy import Pool
-from typing import List
+from typing import List, Optional
 
 import requests
+import aiohttp
 
 from db.models.room import Room, ColorType
 from sunrise_api import SunriseSunsetAPI
@@ -22,6 +23,7 @@ class Color:
         self.v = v
         self.w = w
 
+    @staticmethod
     def from_str_blebox(text: str):
         r = int(text[0:2], 16)
         g = int(text[2:4], 16)
@@ -92,7 +94,6 @@ class ColorMode(Enum):
     CRAZY = 6
 
 
-pool = Pool(20)
 class LedRoomManager:
     def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int, max_adc: int,
                  min_adc: int, room: Room):
@@ -109,54 +110,101 @@ class LedRoomManager:
         self.prev_adc_value = 0
         self.ADC_THRESSHOLD = 20
         self.room = room
+        # Zapisujemy wartość closet_brightness jako atrybut, żeby nie odwoływać się do kolumny SQLAlchemy
+        self.closet_brightness = room.closet_brightness or 0
 
-    def _apply_color(self, color: Color, fade_ms=300) -> None:
+    async def _apply_color(self, color: Color, fade_ms=300) -> None:
         color_str = str(color)
         if self.room.type == ColorType.CCT_BLEBOX:
             color_str = color.to_cct()
+        
+        # Przygotowanie wszystkich URL-i
+        urls = []
         for url in self.urls:
             url = f'{url}/s/{color_str}'
             if fade_ms > 0:
                 url += f'/colorFadeMs/{fade_ms}'
-
-            pool.apply_async(requests.get, args=[url])
+            urls.append(url)
+        
+        # Asynchroniczne wysyłanie requestów równolegle
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for url in urls:
+                task = asyncio.create_task(self._send_request(session, url))
+                tasks.append(task)
+            
+            # Czekamy na wszystkie requesty równolegle
+            await asyncio.gather(*tasks, return_exceptions=True)
+        
         print(f"Apply color: {color.h} {color.s} {color.v} {color.w} {color_str}")
+    
+    async def _send_request(self, session: aiohttp.ClientSession, url: str) -> None:
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=2)) as response:
+                pass  # Nie potrzebujemy odpowiedzi
+        except Exception as e:
+            print(f"Error sending request to {url}: {e}")
 
-    def _set_closet_color(self, brightness: float) -> None:
+    async def _set_closet_color(self, brightness: float) -> None:
         value = int(brightness * 255)
         print(f"Apply closet brightness: {value}")
-        for ip in CLOSETS_IPS:
-            url = f'{ip}/json/state'
-            pool.apply_async(requests.post, args=[url], kwds={'json': {'on': value > 2, 'bri': str(value)}})
-            # break
+        
+        # Asynchroniczne wysyłanie requestów do wszystkich szaf równolegle
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for ip in CLOSETS_IPS:
+                url = f'{ip}/json/state'
+                payload = {'on': value > 2, 'bri': str(value)}
+                task = asyncio.create_task(self._send_post_request(session, url, payload))
+                tasks.append(task)
+            
+            # Czekamy na wszystkie requesty równolegle
+            await asyncio.gather(*tasks, return_exceptions=True)
+    
+    async def _send_post_request(self, session: aiohttp.ClientSession, url: str, payload: dict) -> None:
+        try:
+            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=2)) as response:
+                pass  # Nie potrzebujemy odpowiedzi
+        except Exception as e:
+            print(f"Error sending POST request to {url}: {e}")
 
-    def set_enable(self, enabled: bool) -> None:
+    async def set_enable(self, enabled: bool) -> None:
         if enabled == self.is_enabled:
             return
+        
+        old_enabled = self.is_enabled
         self.is_enabled = enabled
+        
         if enabled:
-            self.handle_detected_move()
-            self.set_light(True)
+            # Włączamy - sprawdzamy czy światła nie są już włączone
+            if not self.is_light_on:
+                await self.set_light(True)
         else:
-            self.set_light(False)
+            # Wyłączamy
+            await self.set_light(False)
 
-        self.history.append(HistoryEvent(self.is_light_on, datetime.datetime.utcnow(), HistoryEventType.SWITCH))
+        # Dodajemy event do historii z informacją o wyłączeniu/włączeniu
+        # Funkcja get_current_mode() liczy wyłączenia (not a.is_light_on)
+        # Więc dla wyłączeń: is_light_on=False, dla włączeń: is_light_on=True
+        self.history.append(HistoryEvent(enabled, datetime.datetime.utcnow(), HistoryEventType.SWITCH))
+        
         mode = self.get_current_mode()
+        print(f"Nowy tryb ADC: {mode.name}")
         if mode == ColorMode.CRAZY:
             print("PANIC!!!!")
 
-    def set_light(self, on: bool) -> None:
+    async def set_light(self, on: bool) -> None:
         self.is_light_on = on
         if on:
-            self._apply_color(self.color)
+            await self._apply_color(self.color)
             if self.room.type == ColorType.WRGB_BLEXBOX_WITH_CLOSET:
-                self._set_closet_color(self.room.closet_brightness / 255.0)
+                await self._set_closet_color(float(self.closet_brightness) / 255.0)
         else:
-            self._apply_color(Color(0, 0, 0, 0))
+            await self._apply_color(Color(0, 0, 0, 0))
             if self.room.type == ColorType.WRGB_BLEXBOX_WITH_CLOSET:
-                self._set_closet_color(0)
+                await self._set_closet_color(0)
 
-    def handle_detected_move(self) -> None:
+    async def handle_detected_move(self) -> None:
         if not self.is_enabled:
             return None
         if self.sunrise_api.is_daylight_now():
@@ -164,7 +212,7 @@ class LedRoomManager:
         self.last_move = datetime.datetime.utcnow()
         if self.is_light_on:
             return None
-        self.set_light(True)
+        await self.set_light(True)
 
     def should_switch_off_light(self) -> bool:
         if not self.is_enabled:
@@ -179,9 +227,9 @@ class LedRoomManager:
             return True
         return False
 
-    def switch_off_lights_if_needed(self) -> None:
+    async def switch_off_lights_if_needed(self) -> None:
         if self.should_switch_off_light():
-            self.set_light(False)
+            await self.set_light(False)
 
     def trim_history(self):
         if len(self.history) == 0:
@@ -213,8 +261,10 @@ class LedRoomManager:
             return ColorMode.CLOSET
         elif len(offs) >= 4:
             return ColorMode.CRAZY  # crazy + clear history
+        else:
+            return ColorMode.BRIGHTNESS
 
-    def change_adc(self, adc_value: float, override_mode: ColorMode = None, ignore_threshold: bool = False) -> None:
+    async def change_adc(self, adc_value: float, override_mode: Optional[ColorMode] = None, ignore_threshold: bool = False) -> None:
         print("Adc value is {}".format(adc_value))
         if not ignore_threshold:
             if abs(self.prev_adc_value - adc_value) < self.ADC_THRESSHOLD:
@@ -236,39 +286,39 @@ class LedRoomManager:
         self.color.s = 1
         if mode == ColorMode.BRIGHTNESS:
             self.color.v = value
-            self._apply_color(self.color)
+            await self._apply_color(self.color)
         if mode == ColorMode.HUE:
             self.color.h = value
-            self._apply_color(self.color)
+            await self._apply_color(self.color)
         # if mode == ColorMode.SATURATION:
         #     self.color.s = value
-        #     self._apply_color(self.color)
+        #     await self._apply_color(self.color)
         if mode == ColorMode.WHITE:
             self.color.w = value
-            self._apply_color(self.color)
+            await self._apply_color(self.color)
         if mode == ColorMode.CLOSET:
             self.color.v = value
-            # self._apply_color(self.color)
-            self._set_closet_color(value)
+            # await self._apply_color(self.color)
+            await self._set_closet_color(value)
         if mode == ColorMode.CRAZY:
             print("Crazy adc")
-            asyncio.create_task(self.crazy_panic())
+            await self.crazy_panic()
 
         self.history.append(HistoryEvent(self.is_light_on, datetime.datetime.utcnow(), HistoryEventType.ADC, value))
 
     async def crazy_panic(self) -> None:
         for i in range(50):
-            # self._apply_color(Color(0,0,1,1), 0)
-            # time.sleep(0.03)
-            self._apply_color(Color(0, 0, 0, 0), 0)
-            time.sleep(0.05)
+            # await self._apply_color(Color(0,0,1,1), 0)
             # await asyncio.sleep(0.03)
-            # self._apply_color(Color(random.random(),1,1,0.1), 0)
-            self._apply_color(Color(0, 1, 1, 0.0), 0)
-            time.sleep(0.05)
-            self._apply_color(Color(0, 0, 0, 0), 0)
-            time.sleep(0.05)
-            self._apply_color(Color(0.666, 1, 1, 0.0), 0)
-            time.sleep(0.05)
+            await self._apply_color(Color(0, 0, 0, 0), 0)
+            await asyncio.sleep(0.05)
+            # await asyncio.sleep(0.03)
+            # await self._apply_color(Color(random.random(),1,1,0.1), 0)
+            await self._apply_color(Color(0, 1, 1, 0.0), 0)
+            await asyncio.sleep(0.05)
+            await self._apply_color(Color(0, 0, 0, 0), 0)
+            await asyncio.sleep(0.05)
+            await self._apply_color(Color(0.666, 1, 1, 0.0), 0)
+            await asyncio.sleep(0.05)
 
             # await asyncio.sleep(0.03)
