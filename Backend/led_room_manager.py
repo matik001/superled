@@ -97,7 +97,7 @@ class LedRoomManager:
     def __init__(self, url: str, sunrise_api: SunriseSunsetAPI, color: Color, duration_seconds: int, max_adc: int,
                  min_adc: int, room: Room):
         self.urls = url.split(',')
-        self.last_move = datetime.datetime.now()
+        self.last_move = datetime.datetime.utcnow()
         self.sunrise_api = sunrise_api
         self.color = color
         self.is_light_on = False
@@ -172,7 +172,10 @@ class LedRoomManager:
         if not self.is_light_on:
             return False
         switch_off_time = self.last_move + datetime.timedelta(seconds=self.duration_seconds)
-        if self.sunrise_api.is_daylight_now() or switch_off_time < datetime.datetime.utcnow():
+        if self.sunrise_api.is_daylight_now() and switch_off_time < datetime.datetime.utcnow():
+            print("Switch off")
+            print(str(switch_off_time))
+            print(str(datetime.datetime.utcnow()))
             return True
         return False
 

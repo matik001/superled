@@ -59,15 +59,15 @@ def detected_move(house_name: str, room_name: str):
     room.handle_detected_move()
     return {"OK": "OK"}
 
-
-@app.get("/house/{house_name}/room/{room_name}/switch/{switch_state}")
-def switch_change(house_name: str, room_name: str, switch_state: int, db: Session = Depends(get_db)):
-    return action_handlers.switch_change(house_name, room_name, switch_state)
-
-
-
-@app.get("/house/{house_name}/room/{room_name}/adc/{adc_value}")
-def adc_change(house_name: str, room_name: str, adc_value: int, db: Session = Depends(get_db)):
-    return action_handlers.adc_change(house_name, room_name, adc_value)
+#
+# @app.get("/house/{house_name}/room/{room_name}/switch/{switch_state}")
+# def switch_change(house_name: str, room_name: str, switch_state: int, db: Session = Depends(get_db)):
+#     return action_handlers.switch_change(house_name, room_name, switch_state)
+#
+#
+#
+# @app.get("/house/{house_name}/room/{room_name}/adc/{adc_value}")
+# def adc_change(house_name: str, room_name: str, adc_value: int, db: Session = Depends(get_db)):
+#     return action_handlers.adc_change(house_name, room_name, adc_value)
 
 

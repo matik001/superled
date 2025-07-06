@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../Arduino/mqttled"
+		},
+		{
+			"name": "mqttled",
+			"path": ".."
+		}
+	],
+	"settings": {}
+}
