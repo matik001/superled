@@ -46,8 +46,7 @@ async def turn_off_lights_loop():
         await asyncio.sleep(1)
         for house in managers_dict.values():
             for room in house.values():
-                if bool(room.room.use_motion_detector):
-                    await room.switch_off_lights_if_needed()
+                await room.switch_off_lights_if_needed()
 
 async def save_current_colors_to_db():
     """Zapisuje aktualny kolor każdego pokoju do bazy danych"""

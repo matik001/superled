@@ -111,11 +111,16 @@ class LedRoomManager:
         self.ADC_THRESSHOLD = 20
         self.room = room
         # Zapisujemy wartość closet_brightness jako atrybut, żeby nie odwoływać się do kolumny SQLAlchemy
-        self.closet_brightness = room.closet_brightness or 0
+        self.closet_brightness = int(room.closet_brightness or 0)
+        
+        # Nowy system trybów
+        self.current_mode_index = 0  # 0=brightness, 1=hue, 2=white, 3=closet, 4=panic
+        self.last_adc_change = datetime.datetime.utcnow()
+        self.mode_order = [ColorMode.BRIGHTNESS, ColorMode.HUE, ColorMode.WHITE, ColorMode.CLOSET, ColorMode.CRAZY]
 
     async def _apply_color(self, color: Color, fade_ms=300) -> None:
         color_str = str(color)
-        if self.room.type == ColorType.CCT_BLEBOX:
+        if ColorType(self.room.type) == ColorType.CCT_BLEBOX:
             color_str = color.to_cct()
         
         # Przygotowanie wszystkich URL-i
@@ -170,38 +175,46 @@ class LedRoomManager:
 
     async def set_enable(self, enabled: bool) -> None:
         if enabled == self.is_enabled:
+            print(f"DEBUG: Brak zmiany - enabled == is_enabled ({enabled})")
             return
         
         old_enabled = self.is_enabled
         self.is_enabled = enabled
         
+        print(f"DEBUG: Zmiana z {old_enabled} na {enabled}")
+        
         if enabled:
-            # Włączamy - sprawdzamy czy światła nie są już włączone
+            # Włączamy - przełączamy na kolejny tryb
             if not self.is_light_on:
+                # Przejdź na kolejny tryb PRZY WŁĄCZENIU
+                old_mode_index = self.current_mode_index
+                self.current_mode_index = (self.current_mode_index + 1) % len(self.mode_order)
+                current_mode = self.mode_order[self.current_mode_index]
+                
+                # Resetuj czas ostatniego ADC - nowy tryb zaczyna "od nowa"
+                self.last_adc_change = datetime.datetime.utcnow()
+                
+                print(f"Nowy tryb ADC po włączeniu: {self.mode_order[old_mode_index].name} → {current_mode.name} (index: {old_mode_index} → {self.current_mode_index})")
+                
+                if current_mode == ColorMode.CRAZY:
+                    print("PANIC!!!!")
+                    # Po panic mode wróć na początek
+                    self.current_mode_index = 0
+                
                 await self.set_light(True)
         else:
             # Wyłączamy
             await self.set_light(False)
 
-        # Dodajemy event do historii z informacją o wyłączeniu/włączeniu
-        # Funkcja get_current_mode() liczy wyłączenia (not a.is_light_on)
-        # Więc dla wyłączeń: is_light_on=False, dla włączeń: is_light_on=True
-        self.history.append(HistoryEvent(enabled, datetime.datetime.utcnow(), HistoryEventType.SWITCH))
-        
-        mode = self.get_current_mode()
-        print(f"Nowy tryb ADC: {mode.name}")
-        if mode == ColorMode.CRAZY:
-            print("PANIC!!!!")
-
     async def set_light(self, on: bool) -> None:
         self.is_light_on = on
         if on:
             await self._apply_color(self.color)
-            if self.room.type == ColorType.WRGB_BLEXBOX_WITH_CLOSET:
+            if ColorType(self.room.type) == ColorType.WRGB_BLEXBOX_WITH_CLOSET:
                 await self._set_closet_color(float(self.closet_brightness) / 255.0)
         else:
             await self._apply_color(Color(0, 0, 0, 0))
-            if self.room.type == ColorType.WRGB_BLEXBOX_WITH_CLOSET:
+            if ColorType(self.room.type) == ColorType.WRGB_BLEXBOX_WITH_CLOSET:
                 await self._set_closet_color(0)
 
     async def handle_detected_move(self) -> None:
@@ -209,6 +222,10 @@ class LedRoomManager:
             return None
         if self.sunrise_api.is_daylight_now():
             return None
+        
+        # Sprawdź reset trybu przed obsługą ruchu
+        self.check_mode_reset()
+        
         self.last_move = datetime.datetime.utcnow()
         if self.is_light_on:
             return None
@@ -219,6 +236,8 @@ class LedRoomManager:
             return False
         if not self.is_light_on:
             return False
+        if not bool(self.room.use_motion_detector):
+            return False
         switch_off_time = self.last_move + datetime.timedelta(seconds=self.duration_seconds)
         if self.sunrise_api.is_daylight_now() and switch_off_time < datetime.datetime.utcnow():
             print("Switch off")
@@ -228,41 +247,31 @@ class LedRoomManager:
         return False
 
     async def switch_off_lights_if_needed(self) -> None:
+        # Usunąłem check_mode_reset() stąd - może resetował tryb zbyt często
         if self.should_switch_off_light():
             await self.set_light(False)
 
-    def trim_history(self):
-        if len(self.history) == 0:
-            return
-        max_seconds_diff = 3
-        prev = self.history[0]
-        new_history = []
-        for event in self.history:
-            if (event.date - prev.date).total_seconds() > max_seconds_diff:
-                new_history = []
-            new_history.append(event)
-            prev = event
-        if (datetime.datetime.utcnow() - prev.date).total_seconds() > max_seconds_diff:
-            new_history = []
-        self.history = new_history
+    def check_mode_reset(self):
+        """Sprawdza czy nie należy wrócić do trybu BRIGHTNESS po 2 sekundach nieaktywności ADC"""
+        reset_seconds = 2  # 2 sekundy na powrót do BRIGHTNESS
+        
+        # Jeśli minęło więcej niż reset_seconds od ostatniego ruchu ADC
+        time_since_last_adc = (datetime.datetime.utcnow() - self.last_adc_change).total_seconds()
+        
+        if time_since_last_adc > reset_seconds:
+            if self.current_mode_index != 0:  # Jeśli nie jesteśmy już w BRIGHTNESS
+                old_mode = self.mode_order[self.current_mode_index]
+                print(f"Powrót do trybu BRIGHTNESS po {reset_seconds} sekundach nieaktywności ADC (był {old_mode.name})")
+                self.current_mode_index = 0
 
     def get_current_mode(self) -> ColorMode:
-        self.trim_history()
-        offs = [a for a in self.history if a.type == HistoryEventType.SWITCH and not a.is_light_on]
-        if len(offs) == 0:
-            return ColorMode.BRIGHTNESS
-        elif len(offs) == 1:
-            return ColorMode.HUE
-        # elif len(offs) == 2:
-        #     return ColorMode.SATURATION
-        elif len(offs) == 2:
-            return ColorMode.WHITE
-        elif len(offs) == 3:
-            return ColorMode.CLOSET
-        elif len(offs) >= 4:
-            return ColorMode.CRAZY  # crazy + clear history
-        else:
-            return ColorMode.BRIGHTNESS
+        """Zwraca aktualny tryb na podstawie current_mode_index"""
+        self.check_mode_reset()
+        return self.mode_order[self.current_mode_index]
+
+    def trim_history(self):
+        """Usuwamy starą funkcję trim_history - nie jest już potrzebna"""
+        pass
 
     async def change_adc(self, adc_value: float, override_mode: Optional[ColorMode] = None, ignore_threshold: bool = False) -> None:
         print("Adc value is {}".format(adc_value))
@@ -279,31 +288,36 @@ class LedRoomManager:
         if not self.is_enabled:
             return None
 
+        # Pobierz aktualny tryb PRZED aktualizacją czasu (żeby reset mógł zadziałać)
+        print(f"DEBUG: Przed get_current_mode() - current_mode_index: {self.current_mode_index}, last_adc_change: {(datetime.datetime.utcnow() - self.last_adc_change).total_seconds():.1f}s temu")
         mode = self.get_current_mode()
         if override_mode is not None:
             mode = override_mode
+            
+        print(f"DEBUG: Po get_current_mode() - używany tryb ADC: {mode.name} (index: {self.current_mode_index})")
+        
+        # Aktualizuj czas ostatniego ruchu ADC DOPIERO po sprawdzeniu trybu
+        self.last_adc_change = datetime.datetime.utcnow()
 
         self.color.s = 1
         if mode == ColorMode.BRIGHTNESS:
             self.color.v = value
             await self._apply_color(self.color)
-        if mode == ColorMode.HUE:
+        elif mode == ColorMode.HUE:
             self.color.h = value
             await self._apply_color(self.color)
-        # if mode == ColorMode.SATURATION:
-        #     self.color.s = value
-        #     await self._apply_color(self.color)
-        if mode == ColorMode.WHITE:
+        elif mode == ColorMode.WHITE:
             self.color.w = value
             await self._apply_color(self.color)
-        if mode == ColorMode.CLOSET:
+        elif mode == ColorMode.CLOSET:
             self.color.v = value
             # await self._apply_color(self.color)
             await self._set_closet_color(value)
-        if mode == ColorMode.CRAZY:
+        elif mode == ColorMode.CRAZY:
             print("Crazy adc")
             await self.crazy_panic()
 
+        # Zachowaj historię dla kompatybilności (można usunąć w przyszłości)
         self.history.append(HistoryEvent(self.is_light_on, datetime.datetime.utcnow(), HistoryEventType.ADC, value))
 
     async def crazy_panic(self) -> None:

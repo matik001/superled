@@ -10,7 +10,7 @@ class ActionHandlers:
     async def switch_change(self, house_name: str, room_name: str, switch_state: int):
         is_switched = switch_state == 1
         room = self.managers_dict[house_name][room_name]
-        print("Switch state is {}".format(is_switched))
+        print(f"Switch state is {is_switched}, current_mode_index: {room.current_mode_index}")
         await room.set_enable(is_switched)
         return {"OK": "OK"}
 
