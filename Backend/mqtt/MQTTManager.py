@@ -35,7 +35,13 @@ class MQTTManager:
         def on_message(client, userdata, msg):
             payload = msg.payload.decode()
             print(f"Received `{payload}` from `{msg.topic}` topic")
-            asyncio.run_coroutine_threadsafe(handler(payload, msg.topic), self.event_loop)
+            try:
+                if self.event_loop and not self.event_loop.is_closed():
+                    asyncio.run_coroutine_threadsafe(handler(payload, msg.topic), self.event_loop)
+                else:
+                    print("Event loop is not available or closed")
+            except Exception as e:
+                print(f"Error running coroutine: {e}")
 
         self.client.subscribe(topic)
         self.client.message_callback_add(topic, on_message)
@@ -51,5 +57,18 @@ class MQTTManager:
         # self.client.on_message = on_message
 
     def run(self):
-        self.event_loop = asyncio.get_event_loop()
+        try:
+            # Użyj get_running_loop() zamiast get_event_loop()
+            self.event_loop = asyncio.get_running_loop()
+            print(f"Using running event loop: {self.event_loop}")
+        except RuntimeError:
+            print("No running event loop found, trying to get current loop")
+            try:
+                self.event_loop = asyncio.get_event_loop()
+                print(f"Using current event loop: {self.event_loop}")
+            except RuntimeError as e:
+                print(f"Could not get event loop: {e}")
+                return
+        
         self.client.loop_start()
+        print("MQTT client loop started")

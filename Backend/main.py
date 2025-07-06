@@ -13,6 +13,7 @@ from db.models.house import House
 import datetime
 from enum import Enum
 from typing import Dict
+import os
 
 from fastapi import FastAPI, Depends
 import requests
@@ -28,10 +29,12 @@ db = next(get_db())
 houses = db.query(House).all()
 managers_dict: Dict[str, Dict[str, LedRoomManager]] = {}
 for house in houses:
-    managers_dict[house.name] = {}
+    house_name = str(house.name)
+    managers_dict[house_name] = {}
     for room in house.rooms:
-        color = Color.from_str_blebox(room.desired_color)
-        managers_dict[house.name][room.name] = LedRoomManager(room.url, sunrise_api, color, room.detection_time, room.max_adc, room.min_adc, room)
+        room_name = str(room.name)
+        color = Color.from_str_blebox(str(room.desired_color))
+        managers_dict[house_name][room_name] = LedRoomManager(str(room.url), sunrise_api, color, int(room.detection_time), int(room.max_adc), int(room.min_adc), room)
 
 action_handlers = ActionHandlers(managers_dict)
 mqtt = LedMQTT(action_handlers)
@@ -43,7 +46,7 @@ async def turn_off_lights_loop():
         await asyncio.sleep(1)
         for house in managers_dict.values():
             for room in house.values():
-                if room.room.use_motion_detector:
+                if bool(room.room.use_motion_detector):
                     await room.switch_off_lights_if_needed()
 
 async def save_current_colors_to_db():
@@ -91,10 +94,15 @@ async def save_colors_to_db_loop():
         await asyncio.sleep(3600)  # 3600 sekund = 1 godzina
         await save_current_colors_to_db()
 
-mqtt.start()
-
 @app.on_event("startup")
 async def startup_event():
+    print("Starting application...")
+    print(f"MQTT Host: {os.getenv('MQTT_HOST')}")
+    print(f"MQTT Login: {os.getenv('MQTT_LOGIN')}")
+    print(f"Event loop: {asyncio.get_running_loop()}")
+    
+    # Uruchom MQTT w kontekście async
+    mqtt.start()
     asyncio.create_task(turn_off_lights_loop())
     asyncio.create_task(save_colors_to_db_loop())
     # Zapisz kolory przy starcie programu

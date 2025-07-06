@@ -46,7 +46,7 @@ bool ensure_connection()
 {
     if (client_id.length() == 0)
     {
-        client_id = "esp32-mqttClient-";
+        client_id = "esp8266-mqttClient-";
         client_id += String(WiFi.macAddress());
     }
 
