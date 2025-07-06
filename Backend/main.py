@@ -71,9 +71,11 @@ async def save_current_colors_to_db():
                     old_color = db_room.desired_color
                     # Używamy setattr aby uniknąć problemów z SQLAlchemy columns
                     setattr(db_room, 'desired_color', current_color_hex)
+                    setattr(db_room, 'closet_brightness', room_manager.closet_brightness)
                     db_session.commit()
                     
                     print(f"Zapisano kolor pokoju {house_name}/{room_name}: {old_color} -> {current_color_hex}")
+                    print(f"Zapisano jasność szafki {house_name}/{room_name}: {room_manager.closet_brightness}")
                 else:
                     print(f"Nie znaleziono pokoju {house_name}/{room_name} w bazie danych")
         

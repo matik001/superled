@@ -311,6 +311,8 @@ class LedRoomManager:
             await self._apply_color(self.color)
         elif mode == ColorMode.CLOSET:
             self.color.v = value
+            # Aktualizuj closet_brightness w pamięci (0-255)
+            self.closet_brightness = int(value * 255)
             # await self._apply_color(self.color)
             await self._set_closet_color(value)
         elif mode == ColorMode.CRAZY:
